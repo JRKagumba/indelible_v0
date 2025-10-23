@@ -240,8 +240,10 @@
             
             if (savedMode === 'true' || (savedMode === null && prefersDark)) {
                 document.documentElement.classList.add('dark');
-                document.getElementById('sun-icon').classList.add('hidden');
-                document.getElementById('moon-icon').classList.remove('hidden');
+                const sunIcon = document.getElementById('sun-icon');
+                const moonIcon = document.getElementById('moon-icon');
+                if (sunIcon) sunIcon.classList.add('hidden');
+                if (moonIcon) moonIcon.classList.remove('hidden');
             }
         }
 

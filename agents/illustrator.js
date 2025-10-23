@@ -5,7 +5,7 @@ const path = require('path');
 class IllustratorAgent {
     constructor(apiKey) {
         this.genAI = new GoogleGenerativeAI(apiKey);
-        this.model = this.genAI.getGenerativeModel({ model: "imagen-3.0-generate-002" });
+        this.model = this.genAI.getGenerativeModel({ model: "gemini-2.5-flash-image-preview" });
     }
 
     async generateImage(visualPrompt, word, outputDir) {
@@ -15,7 +15,10 @@ class IllustratorAgent {
                     parts: [{
                         text: visualPrompt
                     }]
-                }]
+                }],
+                generationConfig: {
+                    responseModalities: ["IMAGE"]
+                }
             });
 
             const response = await result.response;

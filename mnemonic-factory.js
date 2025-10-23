@@ -94,14 +94,15 @@ class MnemonicFactory {
                 throw new Error(`Lexicographer failed: ${lexResult.error}`);
             }
 
-            // Agent 2: Pronouncer (temporarily disabled for testing)
-            console.log('  → Generating pronunciation... (SKIPPED FOR TESTING)');
-            const pronouncerResult = {
-                success: true,
-                data: {
-                    audio_path: `audio/pronounce/${word.toLowerCase()}.mp3`
-                }
-            };
+            // Agent 2: Pronouncer (always runs)
+            console.log('  → Generating pronunciation...');
+            const pronouncerResult = await this.retryOperation(() => 
+                this.pronouncer.generatePronunciation(word, this.audioPronounceDir)
+            );
+            
+            if (!pronouncerResult.success) {
+                throw new Error(`Pronouncer failed: ${pronouncerResult.error}`);
+            }
 
             // Initialize word data
             const wordData = {
@@ -147,13 +148,14 @@ class MnemonicFactory {
                 throw new Error(`Art Director failed: ${artResult.error}`);
             }
 
-            console.log('  → Generating AI image... (SKIPPED FOR TESTING)');
-            const imageResult = {
-                success: true,
-                data: {
-                    image_path: `images/ai/${word.toLowerCase()}.png`
-                }
-            };
+            console.log('  → Generating AI image...');
+            const imageResult = await this.retryOperation(() => 
+                this.illustrator.generateImage(artResult.data.visual_prompt, word, this.imagesAiDir)
+            );
+            
+            if (!imageResult.success) {
+                throw new Error(`Illustrator failed: ${imageResult.error}`);
+            }
 
             // Add AI option
             wordData.options.push({

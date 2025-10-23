@@ -13,7 +13,10 @@ class PronouncerAgent {
             const prompt = `Say the word: ${word}`;
             
             const result = await this.model.generateContent({
-                contents: [{ parts: [{ text: prompt }] }]
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: {
+                    responseModalities: ["AUDIO"]
+                }
             });
 
             const response = await result.response;

@@ -15,7 +15,10 @@ class NarratorAgent {
                     parts: [{
                         text: storyText
                     }]
-                }]
+                }],
+                generationConfig: {
+                    responseModalities: ["AUDIO"]
+                }
             });
 
             const response = await result.response;

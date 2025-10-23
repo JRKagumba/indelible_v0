@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-gray-50">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Indelible - Vocabulary Learning</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                },
+            },
+        };
+    </script>
+    <script type="module">
+        // Global State
+        let allWords = [];
+        let currentIndex = 0;
+        let currentWordData = null;
+        let currentAudio = null;
+        let currentOptionType = 'creator'; // 'creator' or 'ai'
+        let appState = 'words'; // 'words', 'story', 'completion'
+        let allWordsCompleted = false;
+
+        // DOM Elements
+        const progressBar = document.getElementById('progress-bar');
+        const progressText = document.getElementById('progress-text');
+        const wordEl = document.getElementById('word');
+        const pronounceBtn = document.getElementById('pronounce-btn');
+        const definitionEl = document.getElementById('definition');
+        const exampleEl = document.getElementById('example');
+        
+        const comparisonSection = document.getElementById('comparison-section');
+        const mnemonicTitle = document.getElementById('mnemonic-title');
+        const mnemonicImg = document.getElementById('mnemonic-img');
+        const mnemonicText = document.getElementById('mnemonic-text');
+        const switchBtn = document.getElementById('switch-btn');
+        const switchBtnAiIcon = document.getElementById('switch-btn-ai-icon');
+        const switchBtnCreatorIcon = document.getElementById('switch-btn-creator-icon');
+        const switchBtnText = document.getElementById('switch-btn-text');
+
+        const navPrev = document.getElementById('nav-prev');
+        const navNext = document.getElementById('nav-next');
+        const knowWordBtn = document.getElementById('know-word-btn');
+        
+        // Story Section Elements
+        const storySection = document.getElementById('story-section');
+        const storyTextEl = document.getElementById('story-text');
+        const storyAudioBtn = document.getElementById('story-audio-btn');
+
+        /**
+         * Plays an audio file, stopping any currently playing audio.
+         */
+        async function playAudio(path) {
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio.currentTime = 0;
+            }
+            
+            try {
+                // For now, just show a placeholder since we don't have real audio
+                console.log("Would play audio:", path);
+                showSuccess("Audio would play here");
+            } catch (e) {
+                console.error("Error playing audio:", e);
+                showError("Could not play audio.");
+            }
+        }
+
+        /**
+         * Loads and displays the data for the current word.
+         */
+        async function loadWord() {
+            if (allWords.length === 0) return;
+
+            currentWordData = allWords[currentIndex];
+            
+            // 1. Update Progress
+            const progressPercent = ((currentIndex + 1) / allWords.length) * 100;
+            progressBar.style.width = `${progressPercent}%`;
+            progressText.textContent = `Word ${currentIndex + 1} of ${allWords.length}`;
+            
+            // Add a subtle animation to the progress bar
+            progressBar.style.transition = 'width 0.3s ease-in-out';
+
+            // 2. Load Word, Definition, Example
+            wordEl.textContent = currentWordData.word;
+            definitionEl.textContent = currentWordData.definition;
+            exampleEl.textContent = currentWordData.example;
+            
+            // 3. Reset and load Comparison Section
+            // Default to 'creator' if it exists, otherwise 'ai'
+            const hasCreator = currentWordData.options.find(o => o.type === 'creator');
+            currentOptionType = hasCreator ? 'creator' : 'ai';
+            await updateComparisonView();
+
+            // 4. Update Navigation
+            navPrev.disabled = currentIndex === 0;
+            navPrev.classList.toggle('opacity-50', currentIndex === 0);
+            navNext.disabled = currentIndex === allWords.length - 1;
+            navNext.classList.toggle('opacity-50', currentIndex === allWords.length - 1);
+            
+            // 5. Hook up audio buttons
+            pronounceBtn.onclick = () => playAudio(currentWordData.pronunciation_audio_path);
+        }
+
+        /**
+         * Updates the "Mnemonic" card based on the currentOptionType.
+         */
+        async function updateComparisonView() {
+            const option = currentWordData.options.find(o => o.type === currentOptionType);
+            if (!option) {
+                console.error("Could not find option type:", currentOptionType);
+                return;
+            }
+
+            mnemonicTitle.textContent = currentOptionType === 'creator' ? "Memory Mnemonic" : "AI Mnemonic";
+            mnemonicText.textContent = option.mnemonic_text;
+            
+            // Show loading spinner for image
+            mnemonicImg.src = "https://placehold.co/600x400/eee/999?text=Loading...";
+            mnemonicImg.src = option.image_path;
+
+            // Update switch button state
+            const hasAiOption = currentWordData.options.find(o => o.type === 'ai');
+            if (!hasAiOption) {
+                switchBtn.classList.add('hidden');
+                return;
+            }
+            
+            switchBtn.classList.remove('hidden');
+            
+            if (currentOptionType === 'creator') {
+                switchBtnText.textContent = "See AI Version";
+                switchBtnAiIcon.classList.remove('hidden');
+                switchBtnCreatorIcon.classList.add('hidden');
+            } else {
+                switchBtnText.textContent = "See Creator Version";
+                switchBtnAiIcon.classList.add('hidden');
+                switchBtnCreatorIcon.classList.remove('hidden');
+            }
+        }
+        
+        /**
+         * Handles the click on the "Switch Mnemonic" button.
+         */
+        function switchMnemonic() {
+            const hasCreator = currentWordData.options.find(o => o.type === 'creator');
+            
+            if (currentOptionType === 'creator') {
+                currentOptionType = 'ai';
+            } else {
+                // Only switch back to creator if it exists
+                currentOptionType = hasCreator ? 'creator' : 'ai';
+            }
+            updateComparisonView();
+        }
+
+        /**
+         * Handles "I know this word" - replaces with a new word
+         */
+        function knowThisWord() {
+            if (currentIndex < allWords.length - 1) {
+                currentIndex++;
+                loadWord();
+            } else {
+                // If it's the last word, mark as completed and show story
+                allWordsCompleted = true;
+                showStory();
+            }
+        }
+
+        /**
+         * Shows the story section after all words are completed
+         */
+        function showStory() {
+            appState = 'story';
+            document.getElementById('words-content').classList.add('hidden');
+            document.getElementById('story-section').classList.remove('hidden');
+            document.getElementById('nav-prev').classList.add('hidden');
+            document.getElementById('nav-next').classList.add('hidden');
+            document.getElementById('know-word-btn').classList.add('hidden');
+            
+            // Generate a story using all the words
+            const storyText = generateStoryWithAllWords();
+            document.getElementById('story-text').textContent = storyText;
+        }
+
+        /**
+         * Generates a story that includes all the words from the session
+         */
+        function generateStoryWithAllWords() {
+            const words = allWords.map(w => w.word.toLowerCase());
+            return `The normally ${words[2]} fighter became surprisingly ${words[0]} when asked about the match. He knew his fame was ${words[1]} and one wrong word could make it all disappear. The project was put in ${words[3]} until the budget was approved, but the thief ${words[4]} with the stolen goods before the police arrived.`;
+        }
+
+        /**
+         * Shows the completion screen and hides other content.
+         */
+        function showCompletion() {
+            appState = 'completion';
+            document.getElementById('words-content').classList.add('hidden');
+            document.getElementById('story-section').classList.remove('hidden');
+            document.getElementById('nav-prev').classList.add('hidden');
+            document.getElementById('nav-next').classList.add('hidden');
+            document.getElementById('know-word-btn').classList.add('hidden');
+        }
+
+        /**
+         * Toggles dark mode and saves preference to localStorage.
+         */
+        function toggleDarkMode() {
+            const html = document.documentElement;
+            const sunIcon = document.getElementById('sun-icon');
+            const moonIcon = document.getElementById('moon-icon');
+            
+            if (html.classList.contains('dark')) {
+                html.classList.remove('dark');
+                sunIcon.classList.remove('hidden');
+                moonIcon.classList.add('hidden');
+                localStorage.setItem('darkMode', 'false');
+            } else {
+                html.classList.add('dark');
+                sunIcon.classList.add('hidden');
+                moonIcon.classList.remove('hidden');
+                localStorage.setItem('darkMode', 'true');
+            }
+        }
+
+        /**
+         * Initializes dark mode based on user preference or system preference.
+         */
+        function initDarkMode() {
+            const savedMode = localStorage.getItem('darkMode');
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            
+            if (savedMode === 'true' || (savedMode === null && prefersDark)) {
+                document.documentElement.classList.add('dark');
+                document.getElementById('sun-icon').classList.add('hidden');
+                document.getElementById('moon-icon').classList.remove('hidden');
+            }
+        }
+
+        /**
+         * Main initialization function.
+         */
+        async function init() {
+            // Initialize dark mode first
+            initDarkMode();
+            
+            // Setup Listeners
+            navPrev.onclick = () => {
+                if (currentIndex > 0) {
+                    currentIndex--;
+                    loadWord();
+                }
+            };
+            navNext.onclick = () => {
+                if (currentIndex < allWords.length - 1) {
+                    currentIndex++;
+                    loadWord();
+                } else {
+                    // If it's the last word, mark as completed and show story
+                    allWordsCompleted = true;
+                    showStory();
+                }
+            };
+            
+            switchBtn.onclick = switchMnemonic;
+            knowWordBtn.onclick = knowThisWord;
+
+            // Dark Mode Toggle
+            document.getElementById('dark-mode-toggle').onclick = toggleDarkMode;
+
+            // Mobile Swipe Support
+            let startX = 0;
+            let startY = 0;
+            let endX = 0;
+            let endY = 0;
+
+            document.addEventListener('touchstart', (e) => {
+                startX = e.touches[0].clientX;
+                startY = e.touches[0].clientY;
+            });
+
+            document.addEventListener('touchend', (e) => {
+                endX = e.changedTouches[0].clientX;
+                endY = e.changedTouches[0].clientY;
+                handleSwipe();
+            });
+
+            function handleSwipe() {
+                const deltaX = endX - startX;
+                const deltaY = endY - startY;
+                const minSwipeDistance = 50;
+
+                // Only trigger if horizontal swipe is more significant than vertical
+                if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > minSwipeDistance) {
+                    if (deltaX > 0) {
+                        // Swipe right - go to previous word
+                        if (currentIndex > 0) {
+                            currentIndex--;
+                            loadWord();
+                        }
+                    } else {
+                        // Swipe left - go to next word
+                        if (currentIndex < allWords.length - 1) {
+                            currentIndex++;
+                            loadWord();
+                        } else if (!allWordsCompleted) {
+                            // If it's the last word, mark as completed and show story
+                            allWordsCompleted = true;
+                            showStory();
+                        }
+                    }
+                }
+            }
+
+            // Load test content
+            try {
+                const response = await fetch('./content/test-content.json');
+                if (response.ok) {
+                    allWords = await response.json();
+                    console.log(`Loaded ${allWords.length} words from test-content.json`);
+                } else {
+                    console.warn('Could not load test-content.json, using fallback');
+                    allWords = [
+                        {
+                            "word": "Reticent",
+                            "definition": "Inclined to be silent or uncommunicative in speech; reserved.",
+                            "example": "When the reporter asked about the scandal, the politician remained reticent, offering no comment.",
+                            "pronunciation_audio_path": "audio/pronounce/reticent.mp3",
+                            "options": [
+                                {
+                                    "type": "creator",
+                                    "mnemonic_text": "Retired + Cent: The character is a Cent coin that looks Retired, old, and doesn't want to talk.",
+                                    "image_path": "https://placehold.co/600x400/3498db/ffffff?text=Creator+Image+(Reticent)"
+                                },
+                                {
+                                    "type": "ai",
+                                    "mnemonic_text": "RED TIE SENT: A person is so Reticent that instead of speaking, they 'SENT' a 'RED TIE' as their representative.",
+                                    "image_path": "https://placehold.co/600x400/e74c3c/ffffff?text=AI+Image+(Reticent)"
+                                }
+                            ]
+                        }
+                    ];
+                }
+            } catch (error) {
+                console.error('Error loading test content:', error);
+            }
+
+            if (allWords.length > 0) {
+                loadWord();
+            } else {
+                showError("No words found.");
+            }
+        }
+        
+        // --- Toast Notifications ---
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toast-message');
+            
+            toastMessage.textContent = message;
+            
+            if (type === 'success') {
+                toast.className = "fixed top-5 right-5 bg-green-500 text-white p-4 rounded-lg shadow-lg z-50 transform transition-all duration-300 ease-in-out";
+            } else {
+                toast.className = "fixed top-5 right-5 bg-red-500 text-white p-4 rounded-lg shadow-lg z-50 transform transition-all duration-300 ease-in-out";
+            }
+            
+            toast.classList.remove('hidden');
+            
+            setTimeout(() => {
+                toast.classList.add('hidden');
+            }, 3000);
+        }
+        function showError(message) { showToast(message, 'error'); }
+        function showSuccess(message) { showToast(message, 'success'); }
+
+        // Start the app
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</head>
+<body class="h-full font-sans antialiased bg-gray-50 dark:bg-gray-900">
+    
+    <!-- This is the main container -->
+    <div class="flex flex-col min-h-screen">
+        
+        <!-- Header / Progress -->
+        <header class="w-full bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-10">
+            <div class="max-w-3xl mx-auto p-4">
+                <div class="flex justify-between items-center">
+                    <h1 class="text-xl font-bold text-gray-800 dark:text-white">Indelible</h1>
+                    <button id="dark-mode-toggle" class="p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <svg id="sun-icon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                        <svg id="moon-icon" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+                    </button>
+                </div>
+                <div class="mt-2">
+                    <span id="progress-text" class="text-sm font-medium text-gray-500 dark:text-gray-400">Word 0 of 0</span>
+                    <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 mt-1">
+                        <div id="progress-bar" class="bg-blue-600 h-2.5 rounded-full" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+        </header>
+        
+        <!-- Main Content Area -->
+        <main class="flex-grow max-w-3xl w-full mx-auto p-4 md:p-6">
+            
+            <!-- Words Content -->
+            <div id="words-content" class="space-y-6">
+                
+                <!-- 1. Word & Definition Card -->
+                <section class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg">
+                    <!-- Word and Pronunciation -->
+                    <div class="flex justify-between items-center">
+                        <h2 id="word" class="text-4xl font-bold text-gray-900 dark:text-white">Word</h2>
+                        <button id="pronounce-btn" title="Play pronunciation" class="p-2 rounded-full text-gray-500 hover:bg-gray-100 hover:text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <svg class="w-8 h-8" fill="currentColor" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg"><path d="M 104.84375 18.5625 L 99.03125 24.375 C 113.86208 48.69475 113.86208 79.36774 99.03125 103.6875 L 104.8125 109.46875 C 122.54838 81.832167 122.56413 46.206101 104.84375 18.5625 z M 59.1875 25.125 C 58.629358 25.1236 57.976195 25.349584 57.34375 25.875 L 32.71875 46.34375 C 31.620364 47.256261 31.147988 47.40625 29.625 47.40625 L 13.78125 47.40625 C 11.608531 47.40625 9.875 49.139767 9.875 51.3125 L 9.875 76.65625 C 9.875 78.828982 11.608531 80.5625 13.78125 80.5625 L 29.625 80.5625 C 31.147988 80.5625 31.620364 80.712489 32.71875 81.625 L 57.34375 102.09375 C 59.030268 103.49485 60.84375 102.81935 60.84375 101.15625 L 60.84375 26.8125 C 60.84375 25.77307 60.117736 25.12717 59.1875 25.125 z M 90.84375 32.5625 L 85.03125 38.375 C 95.026781 54.00221 95.036195 74.064458 85.03125 89.6875 L 90.8125 95.4375 C 103.78381 76.518526 103.8085 51.484597 90.84375 32.5625 z M 76.8125 46.5625 L 71.09375 52.3125 C 76.297202 59.282784 76.297202 68.779716 71.09375 75.75 L 76.78125 81.4375 C 85.020594 71.306112 85.04355 56.698376 76.8125 46.5625 z "/></svg>
+                        </button>
+                    </div>
+                    <!-- Definition and Example -->
+                    <div class="mt-4 space-y-2">
+                        <p id="definition" class="text-lg text-gray-700 dark:text-gray-300">Definition will load here...</p>
+                        <p id="example" class="text-lg text-gray-500 dark:text-gray-400 italic">"Example sentence will load here..."</p>
+                    </div>
+                </section>
+
+                <!-- 2. Memory Mnemonic Card -->
+                <section id="comparison-section" class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg space-y-4">
+                    <div class="flex justify-between items-center">
+                        <h3 id="mnemonic-title" class="text-2xl font-semibold text-gray-800 dark:text-white">Memory Mnemonic</h3>
+                        <button id="switch-btn" class="flex items-center space-x-2 px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <!-- AI Icon -->
+                            <svg id="switch-btn-ai-icon" class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM9.75 14.25l-.813 2.846L7.5 15.75l2.25-1.5z" /></svg>
+                            <!-- Creator Icon -->
+                            <svg id="switch-btn-creator-icon" class="w-5 h-5 hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M17.982 18.725A7.488 7.488 0 0012 15.75a7.488 7.488 0 00-5.982 2.975m11.963 0a9 9 0 10-11.963 0m11.963 0A8.966 8.966 0 0112 21a8.966 8.966 0 01-5.982-2.275M15 9.75a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                            
+                            <span id="switch-btn-text" class="text-sm font-medium">See AI Version</span>
+                        </button>
+                    </div>
+                    
+                    <img id="mnemonic-img" src="https://placehold.co/600x400/eee/999?text=Loading..." alt="Mnemonic Image" class="w-full rounded-lg bg-gray-200 dark:bg-gray-700 object-cover aspect-video">
+                    
+                    <p id="mnemonic-text" class="text-lg text-gray-700 dark:text-gray-300">Mnemonic text will load here...</p>
+                </section>
+
+            </div>
+
+            <!-- Story Section (shown after all words) -->
+            <div id="story-section" class="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-lg text-center space-y-6 hidden">
+                <div class="space-y-4">
+                    <h2 class="text-3xl font-bold text-gray-900 dark:text-white">See All Words in a Story</h2>
+                    <p id="story-text" class="text-lg text-gray-700 dark:text-gray-300">Story will load here...</p>
+                </div>
+                <button id="story-audio-btn" title="Play story audio" class="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    Play Story Audio
+                </button>
+            </div>
+        </main>
+        
+        <!-- Footer / Navigation -->
+        <footer class="w-full bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 sticky bottom-0 z-10">
+            <div class="max-w-3xl mx-auto p-4 flex justify-between items-center">
+                <button id="nav-prev" class="px-6 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 font-medium rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50">
+                    Previous
+                </button>
+                <div class="flex space-x-3">
+                    <button id="know-word-btn" class="px-4 py-2 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700">
+                        I Know This Word
+                    </button>
+                    <button id="nav-next" class="px-6 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50">
+                        Next
+                    </button>
+                </div>
+            </div>
+        </footer>
+    </div>
+    
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed top-5 right-5 bg-green-500 text-white p-4 rounded-lg shadow-lg z-50 hidden">
+        <span id="toast-message">Success!</span>
+    </div>
+
+</body>
+</html>

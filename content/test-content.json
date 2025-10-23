@@ -1,0 +1,102 @@
+[
+  {
+    "word": "Reticent",
+    "definition": "Inclined to be silent or uncommunicative in speech; reserved.",
+    "example": "When the reporter asked about the scandal, the politician remained reticent, offering no comment.",
+    "pronunciation_audio_path": "audio/pronounce/reticent.mp3",
+    "options": [
+      {
+        "type": "creator",
+        "mnemonic_text": "Retired + Cent: The character is a Cent coin that looks Retired, old, and doesn't want to talk.",
+        "image_path": "images/creator/reticent.png"
+      },
+      {
+        "type": "ai",
+        "mnemonic_text": "RED TIE SENT: A person is so Reticent that instead of speaking, they 'SENT' a 'RED TIE' as their representative.",
+        "image_path": "images/ai/reticent.png"
+      }
+    ],
+    "story_text": "The normally pugnacious fighter became surprisingly reticent when asked about the match. He knew his fame was ephemeral and one wrong word could make it all disappear.",
+    "story_audio_path": "audio/story/story_1.mp3"
+  },
+  {
+    "word": "Ephemeral",
+    "definition": "Lasting for a very short time; transitory.",
+    "example": "The beauty of the cherry blossoms is ephemeral, lasting only for a week.",
+    "pronunciation_audio_path": "audio/pronounce/ephemeral.mp3",
+    "options": [
+      {
+        "type": "creator",
+        "mnemonic_text": "A FEMALE MURAL: The artist painted a 'FEMALE MURAL' with chalk on the sidewalk, knowing it was ephemeral and would be gone after the rain.",
+        "image_path": "images/creator/ephemeral.png"
+      },
+      {
+        "type": "ai",
+        "mnemonic_text": "E-PHEM-ERAL: Think of an 'E-mail' that's 'PHONE' 'ERASED' - it's temporary and disappears quickly.",
+        "image_path": "images/ai/ephemeral.png"
+      }
+    ],
+    "story_text": "The normally pugnacious fighter became surprisingly reticent when asked about the match. He knew his fame was ephemeral and one wrong word could make it all disappear.",
+    "story_audio_path": "audio/story/story_1.mp3"
+  },
+  {
+    "word": "Pugnacious",
+    "definition": "Eager or quick to argue, quarrel, or fight; combative.",
+    "example": "The pugnacious student was always ready to debate any topic with anyone.",
+    "pronunciation_audio_path": "audio/pronounce/pugnacious.mp3",
+    "options": [
+      {
+        "type": "creator",
+        "mnemonic_text": "PUG + NATION: A 'PUG' dog leading a 'NATION' of other dogs into battle - very combative and ready to fight.",
+        "image_path": "images/creator/pugnacious.png"
+      },
+      {
+        "type": "ai",
+        "mnemonic_text": "PUG-NA-CIOUS: A 'PUG' dog that's 'NA' (not) 'CIOUS' (shy) - it's aggressive and ready to fight.",
+        "image_path": "images/ai/pugnacious.png"
+      }
+    ],
+    "story_text": "The normally pugnacious fighter became surprisingly reticent when asked about the match. He knew his fame was ephemeral and one wrong word could make it all disappear.",
+    "story_audio_path": "audio/story/story_1.mp3"
+  },
+  {
+    "word": "Abeyance",
+    "definition": "A state of temporary disuse or suspension.",
+    "example": "The project was put in abeyance until the budget was approved.",
+    "pronunciation_audio_path": "audio/pronounce/abeyance.mp3",
+    "options": [
+      {
+        "type": "creator",
+        "mnemonic_text": "\"A... Bay... (in) Suspense\": Everything in \"A\" (A-) \"Bay\" (-bey-) is \"on pause\" or \"in suspense\" (-ance) because of the giant yawning face. The entire scene is held in a state of suspension.",
+        "image_path": "images/creator/abeyance.png"
+      },
+      {
+        "type": "ai",
+        "mnemonic_text": "A-BEY-ANCE: 'A' 'BAY' that's 'ON PAUSE' - like a bay that's temporarily suspended or waiting.",
+        "image_path": "images/ai/abeyance.png"
+      }
+    ],
+    "story_text": "The normally pugnacious fighter became surprisingly reticent when asked about the match. He knew his fame was ephemeral and one wrong word could make it all disappear.",
+    "story_audio_path": "audio/story/story_1.mp3"
+  },
+  {
+    "word": "Abscond",
+    "definition": "To leave hurriedly and secretly, typically to avoid detection or arrest.",
+    "example": "The thief absconded with the stolen goods before the police arrived.",
+    "pronunciation_audio_path": "audio/pronounce/abscond.mp3",
+    "options": [
+      {
+        "type": "creator",
+        "mnemonic_text": "\"Absent... 'Con'\": The man is a \"Con\" (-cond) who is about to be \"Absent\" (Abs-) from the house, having left hurriedly with the stolen goods.",
+        "image_path": "images/creator/abscond.png"
+      },
+      {
+        "type": "ai",
+        "mnemonic_text": "ABS-COND: 'ABS' (absent) 'CON' (criminal) - a criminal who's absent because they fled secretly.",
+        "image_path": "images/ai/abscond.png"
+      }
+    ],
+    "story_text": "The normally pugnacious fighter became surprisingly reticent when asked about the match. He knew his fame was ephemeral and one wrong word could make it all disappear.",
+    "story_audio_path": "audio/story/story_1.mp3"
+  }
+]

@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-gray-50">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Indelible MVP - Local Test</title>
+    <!-- 1. Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                },
+            },
+        };
+    </script>
+    <!-- 2. Firebase SDKs -->
+    <script type="module">
+        // Import Firebase modules
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getFirestore, collection, addDoc, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getStorage, ref, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
+
+        // --- START: Configuration ---
+        // TODO: Paste your Firebase config object here
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_AUTH_DOMAIN",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_STORAGE_BUCKET",
+            messagingSenderId: "YOUR_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+        // --- END: Configuration ---
+        
+        // --- START: Dummy Data (Replace this with real data fetching) ---
+        // This is a placeholder. You will replace this section with a
+        // fetch call to your 'content.json' file in Firebase Storage.
+        const DUMMY_DATA = [
+            {
+                "word": "Reticent",
+                "definition": "Inclined to be silent or uncommunicative in speech; reserved.",
+                "example": "When the reporter asked about the scandal, the politician remained reticent, offering no comment.",
+                "pronunciation_audio_path": "audio/pronounce/reticent.mp3",
+                "options": [
+                    {
+                        "type": "creator",
+                        "mnemonic_text": "Retired + Cent: The character is a Cent coin that looks Retired, old, and doesn't want to talk.",
+                        "image_path": "https://placehold.co/600x400/3498db/ffffff?text=Creator+Image+(Reticent)"
+                    },
+                    {
+                        "type": "ai",
+                        "mnemonic_text": "RED TIE SENT: A person is so Reticent that instead of speaking, they 'SENT' a 'RED TIE' as their representative.",
+                        "image_path": "https://placehold.co/600x400/e74c3c/ffffff?text=AI+Image+(Reticent)"
+                    }
+                ],
+                "story_text": "The normally pugnacious fighter became surprisingly reticent when asked about the match. He knew his fame was ephemeral and one wrong word could make it all disappear.",
+                "story_audio_path": "audio/story/story_1.mp3"
+            },
+            {
+                "word": "Ephemeral",
+                "definition": "Lasting for a very short time; transitory.",
+                "example": "The beauty of the cherry blossoms is ephemeral, lasting only for a week.",
+                "pronunciation_audio_path": "audio/pronounce/ephemeral.mp3",
+                "options": [
+                    {
+                        "type": "ai",
+                        "mnemonic_text": "A FEMALE MURAL: The artist painted a 'FEMALE MURAL' with chalk on the sidewalk, knowing it was ephemeral and would be gone after the rain.",
+                        "image_path": "https://placehold.co/600x400/9b59b6/ffffff?text=AI+Image+(Ephemeral)"
+                    }
+                ],
+                "story_text": "The normally pugnacious fighter became surprisingly reticent when asked about the match. He knew his fame was ephemeral and one wrong word could make it all disappear.",
+                "story_audio_path": "audio/story/story_1.mp3"
+            }
+        ];
+        // --- END: Dummy Data ---
+
+        // Firebase Initialization
+        let db, storage;
+        try {
+            const app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            storage = getStorage(app);
+            setLogLevel('debug');
+            console.log("Firebase initialized");
+        } catch (e) {
+            console.error("Firebase init failed:", e);
+            showError("Could not connect to database. Feedback will not be saved.");
+        }
+
+        // Global State
+        let allWords = [];
+        let currentIndex = 0;
+        let currentWordData = null;
+        let currentAudio = null;
+        let currentOptionType = 'creator'; // 'creator' or 'ai'
+        let appState = 'preamble'; // 'preamble', 'words', 'completion'
+
+        // DOM Elements
+        const progressBar = document.getElementById('progress-bar');
+        const progressText = document.getElementById('progress-text');
+        const wordEl = document.getElementById('word');
+        const pronounceBtn = document.getElementById('pronounce-btn');
+        const definitionEl = document.getElementById('definition');
+        const exampleEl = document.getElementById('example');
+        
+        const comparisonSection = document.getElementById('comparison-section');
+        const mnemonicTitle = document.getElementById('mnemonic-title');
+        const mnemonicImg = document.getElementById('mnemonic-img');
+        const mnemonicText = document.getElementById('mnemonic-text');
+        const switchBtn = document.getElementById('switch-btn');
+        const switchBtnAiIcon = document.getElementById('switch-btn-ai-icon');
+        const switchBtnCreatorIcon = document.getElementById('switch-btn-creator-icon');
+        const switchBtnText = document.getElementById('switch-btn-text');
+
+        const storySection = document.getElementById('story-section');
+        const storyTextEl = document.getElementById('story-text');
+        const storyAudioBtn = document.getElementById('story-audio-btn');
+
+        const navPrev = document.getElementById('nav-prev');
+        const navNext = document.getElementById('nav-next');
+        
+        // Feedback Modal Elements
+        const feedbackModal = document.getElementById('feedback-modal');
+        const feedbackQuestion = document.getElementById('feedback-question');
+        const feedbackTextarea = document.getElementById('feedback-textarea');
+        const feedbackSubmitBtn = document.getElementById('feedback-submit-btn');
+        const feedbackCancelBtn = document.getElementById('feedback-cancel-btn');
+        
+        let preferredOption = null;
+
+        /**
+         * Simulates fetching a file from Firebase Storage.
+         * In a real app, you'd fetch paths from content.json, then use this.
+         */
+        async function getFirebaseUrl(path) {
+            if (!storage) {
+                console.warn("Storage not initialized. Using placeholder.");
+                return path; // Return the placeholder path
+            }
+            if (path.startsWith('https://')) return path; // It's already a full URL (like our placeholders)
+
+            try {
+                const url = await getDownloadURL(ref(storage, path));
+                return url;
+            } catch (error) {
+                console.error(`Error getting URL for ${path}:`, error);
+                showError(`Could not load media: ${path}`);
+                return `https://placehold.co/600x400/f00/fff?text=Error+Loading+Media`;
+            }
+        }
+        
+        /**
+         * Plays an audio file, stopping any currently playing audio.
+         */
+        async function playAudio(path) {
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio.currentTime = 0;
+            }
+            
+            try {
+                const audioUrl = await getFirebaseUrl(path);
+                currentAudio = new Audio(audioUrl);
+                currentAudio.play();
+            } catch (e) {
+                console.error("Error playing audio:", e);
+                showError("Could not play audio.");
+            }
+        }
+
+        /**
+         * Loads and displays the data for the current word.
+         */
+        async function loadWord() {
+            if (allWords.length === 0) return;
+
+            currentWordData = allWords[currentIndex];
+            
+            // 1. Update Progress
+            const progressPercent = ((currentIndex + 1) / allWords.length) * 100;
+            progressBar.style.width = `${progressPercent}%`;
+            progressText.textContent = `Word ${currentIndex + 1} of ${allWords.length}`;
+            
+            // Add a subtle animation to the progress bar
+            progressBar.style.transition = 'width 0.3s ease-in-out';
+
+            // 2. Load Word, Definition, Example
+            wordEl.textContent = currentWordData.word;
+            definitionEl.textContent = currentWordData.definition;
+            exampleEl.textContent = currentWordData.example;
+            
+            // 3. Reset and load Comparison Section
+            // Default to 'creator' if it exists, otherwise 'ai'
+            const hasCreator = currentWordData.options.find(o => o.type === 'creator');
+            currentOptionType = hasCreator ? 'creator' : 'ai';
+            await updateComparisonView();
+
+            // 4. Load Story Section
+            storyTextEl.textContent = currentWordData.story_text;
+            storySection.classList.remove('hidden'); // Show story section
+
+            // 5. Update Navigation
+            navPrev.disabled = currentIndex === 0;
+            navPrev.classList.toggle('opacity-50', currentIndex === 0);
+            navNext.disabled = currentIndex === allWords.length - 1;
+            navNext.classList.toggle('opacity-50', currentIndex === allWords.length - 1);
+            
+            // 6. Hook up audio buttons
+            pronounceBtn.onclick = () => playAudio(currentWordData.pronunciation_audio_path);
+            storyAudioBtn.onclick = () => playAudio(currentWordData.story_audio_path);
+
+            // 7. Hook up A/B Test feedback buttons
+            // Detach old listeners
+            const creatorBtn = document.getElementById('prefer-creator-btn');
+            const aiBtn = document.getElementById('prefer-ai-btn');
+            
+            const newCreatorBtn = creatorBtn.cloneNode(true);
+            creatorBtn.parentNode.replaceChild(newCreatorBtn, creatorBtn);
+            
+            const newAiBtn = aiBtn.cloneNode(true);
+            aiBtn.parentNode.replaceChild(newAiBtn, aiBtn);
+            
+            // Hide AI button if no AI option
+            if (!currentWordData.options.find(o => o.type === 'ai')) {
+                newAiBtn.classList.add('hidden');
+            } else {
+                newAiBtn.classList.remove('hidden');
+            }
+
+            // Hide Creator button if no creator option
+            if (!hasCreator) {
+                newCreatorBtn.classList.add('hidden');
+            } else {
+                newCreatorBtn.classList.remove('hidden');
+            }
+            
+            newCreatorBtn.onclick = () => showFeedbackModal('creator');
+            newAiBtn.onclick = () => showFeedbackModal('ai');
+        }
+
+        /**
+         * Updates the "Mnemonic" card based on the currentOptionType.
+         */
+        async function updateComparisonView() {
+            const option = currentWordData.options.find(o => o.type === currentOptionType);
+            if (!option) {
+                console.error("Could not find option type:", currentOptionType);
+                return;
+            }
+
+            mnemonicTitle.textContent = currentOptionType === 'creator' ? "Creator's Mnemonic" : "AI's Mnemonic";
+            mnemonicText.textContent = option.mnemonic_text;
+            
+            // Show loading spinner for image
+            mnemonicImg.src = "https://placehold.co/600x400/eee/999?text=Loading...";
+            const imgUrl = await getFirebaseUrl(option.image_path);
+            mnemonicImg.src = imgUrl;
+
+            // Update switch button state
+            const hasAiOption = currentWordData.options.find(o => o.type === 'ai');
+            if (!hasAiOption) {
+                switchBtn.classList.add('hidden');
+                return;
+            }
+            
+            switchBtn.classList.remove('hidden');
+            
+            if (currentOptionType === 'creator') {
+                switchBtnText.textContent = "See AI Alternative";
+                switchBtnAiIcon.classList.remove('hidden');
+                switchBtnCreatorIcon.classList.add('hidden');
+            } else {
+                switchBtnText.textContent = "See Creator's Mnemonic";
+                switchBtnAiIcon.classList.add('hidden');
+                switchBtnCreatorIcon.classList.remove('hidden');
+            }
+        }
+        
+        /**
+         * Handles the click on the "Switch Mnemonic" button.
+         */
+        function switchMnemonic() {
+            const hasCreator = currentWordData.options.find(o => o.type === 'creator');
+            
+            if (currentOptionType === 'creator') {
+                currentOptionType = 'ai';
+            } else {
+                // Only switch back to creator if it exists
+                currentOptionType = hasCreator ? 'creator' : 'ai';
+            }
+            updateComparisonView();
+        }
+
+        /**
+         * Shows the mandatory feedback modal.
+         */
+        function showFeedbackModal(option) {
+            preferredOption = option;
+            feedbackQuestion.textContent = `Why did you prefer the "${option}" version?`;
+            feedbackTextarea.value = '';
+            feedbackTextarea.placeholder = "Your feedback is super helpful! What did you like about this one?";
+            feedbackSubmitBtn.disabled = true; // Disable until user types
+            feedbackModal.classList.remove('hidden');
+        }
+
+        /**
+         * Hides the feedback modal.
+         */
+        function hideFeedbackModal() {
+            feedbackModal.classList.add('hidden');
+            preferredOption = null;
+        }
+
+        /**
+         * Saves feedback to Firestore.
+         */
+        async function submitFeedback() {
+            const feedback = feedbackTextarea.value.trim();
+            if (feedback.length === 0) return;
+
+            feedbackSubmitBtn.disabled = true;
+            feedbackSubmitBtn.textContent = "Submitting...";
+
+            const feedbackData = {
+                word: currentWordData.word,
+                preferred_option: preferredOption,
+                feedback_text: feedback,
+                timestamp: new Date().toISOString(),
+                // You could add more context here
+                // userId: 'test-user-123'
+            };
+
+            console.log("Submitting feedback:", feedbackData);
+            
+            if (!db) {
+                console.warn("Database not initialized. Simulating feedback submission.");
+            } else {
+                try {
+                    await addDoc(collection(db, "feedback"), feedbackData);
+                } catch (e) {
+                    console.error("Error writing document: ", e);
+                    showError("Could not save your feedback. Please try again.");
+                    feedbackSubmitBtn.disabled = false;
+                    feedbackSubmitBtn.textContent = "Submit Feedback";
+                    return;
+                }
+            }
+            
+            feedbackSubmitBtn.textContent = "Submit Feedback";
+            hideFeedbackModal();
+            showSuccess("Feedback saved! Thank you!");
+        }
+
+        /**
+         * Shows the preamble screen and hides other content.
+         */
+        function showPreamble() {
+            appState = 'preamble';
+            document.getElementById('preamble-screen').classList.remove('hidden');
+            document.getElementById('words-content').classList.add('hidden');
+            document.getElementById('completion-screen').classList.add('hidden');
+            document.getElementById('nav-prev').classList.add('hidden');
+            document.getElementById('nav-next').classList.add('hidden');
+        }
+
+        /**
+         * Shows the words content and hides other screens.
+         */
+        function showWords() {
+            appState = 'words';
+            document.getElementById('preamble-screen').classList.add('hidden');
+            document.getElementById('words-content').classList.remove('hidden');
+            document.getElementById('completion-screen').classList.add('hidden');
+            document.getElementById('nav-prev').classList.remove('hidden');
+            document.getElementById('nav-next').classList.remove('hidden');
+        }
+
+        /**
+         * Shows the completion screen and hides other content.
+         */
+        function showCompletion() {
+            appState = 'completion';
+            document.getElementById('preamble-screen').classList.add('hidden');
+            document.getElementById('words-content').classList.add('hidden');
+            document.getElementById('completion-screen').classList.remove('hidden');
+            document.getElementById('nav-prev').classList.add('hidden');
+            document.getElementById('nav-next').classList.add('hidden');
+        }
+
+        /**
+         * Checks if we should show completion screen.
+         */
+        function checkForCompletion() {
+            if (currentIndex >= allWords.length - 1) {
+                showCompletion();
+                return true;
+            }
+            return false;
+        }
+
+        /**
+         * Toggles dark mode and saves preference to localStorage.
+         */
+        function toggleDarkMode() {
+            const html = document.documentElement;
+            const sunIcon = document.getElementById('sun-icon');
+            const moonIcon = document.getElementById('moon-icon');
+            
+            if (html.classList.contains('dark')) {
+                html.classList.remove('dark');
+                sunIcon.classList.remove('hidden');
+                moonIcon.classList.add('hidden');
+                localStorage.setItem('darkMode', 'false');
+            } else {
+                html.classList.add('dark');
+                sunIcon.classList.add('hidden');
+                moonIcon.classList.remove('hidden');
+                localStorage.setItem('darkMode', 'true');
+            }
+        }
+
+        /**
+         * Initializes dark mode based on user preference or system preference.
+         */
+        function initDarkMode() {
+            const savedMode = localStorage.getItem('darkMode');
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            
+            if (savedMode === 'true' || (savedMode === null && prefersDark)) {
+                document.documentElement.classList.add('dark');
+                document.getElementById('sun-icon').classList.add('hidden');
+                document.getElementById('moon-icon').classList.remove('hidden');
+            }
+        }
+
+        /**
+         * Main initialization function.
+         */
+        async function init() {
+            // Initialize dark mode first
+            initDarkMode();
+            
+            // Setup Listeners
+            navPrev.onclick = () => {
+                if (currentIndex > 0) {
+                    currentIndex--;
+                    loadWord();
+                }
+            };
+            navNext.onclick = () => {
+                if (currentIndex < allWords.length - 1) {
+                    currentIndex++;
+                    loadWord();
+                } else {
+                    // Check if we should show completion screen
+                    checkForCompletion();
+                }
+            };
+            
+            switchBtn.onclick = switchMnemonic;
+
+            // Feedback Modal Listeners
+            feedbackCancelBtn.onclick = hideFeedbackModal;
+            feedbackSubmitBtn.onclick = submitFeedback;
+            feedbackTextarea.oninput = () => {
+                feedbackSubmitBtn.disabled = feedbackTextarea.value.trim().length === 0;
+            };
+
+            // Preamble and Completion Button Listeners
+            document.getElementById('start-test-btn').onclick = () => {
+                showWords();
+                loadWord();
+            };
+            
+            document.getElementById('restart-test-btn').onclick = () => {
+                currentIndex = 0;
+                showPreamble();
+            };
+            
+            document.getElementById('share-feedback-btn').onclick = () => {
+                // Simple share functionality - could be enhanced later
+                if (navigator.share) {
+                    navigator.share({
+                        title: 'Indelible MVP Test',
+                        text: 'I just completed testing the Indelible vocabulary learning app!',
+                        url: window.location.href
+                    });
+                } else {
+                    // Fallback: copy URL to clipboard
+                    navigator.clipboard.writeText(window.location.href);
+                    showSuccess('Link copied to clipboard!');
+                }
+            };
+
+            // Dark Mode Toggle
+            document.getElementById('dark-mode-toggle').onclick = toggleDarkMode;
+
+            // --- Real Data Loading ---
+            // Load test content from local file
+            try {
+                const response = await fetch('./content/test-content.json');
+                if (response.ok) {
+                    allWords = await response.json();
+                    console.log(`Loaded ${allWords.length} words from test-content.json`);
+                } else {
+                    console.warn('Could not load test-content.json, falling back to dummy data');
+                    allWords = DUMMY_DATA;
+                }
+            } catch (error) {
+                console.error('Error loading test content:', error);
+                console.warn('Falling back to dummy data');
+                allWords = DUMMY_DATA;
+            }
+            // -------------------------
+
+            if (allWords.length > 0) {
+                // Update the word count in the preamble
+                document.getElementById('word-count').textContent = allWords.length;
+                showPreamble();
+            } else {
+                showError("No words found. Please load content.json.");
+            }
+        }
+        
+        // --- Toast Notifications ---
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toast-message');
+            
+            toastMessage.textContent = message;
+            
+            if (type === 'success') {
+                toast.className = "fixed top-5 right-5 bg-green-500 text-white p-4 rounded-lg shadow-lg z-50 transform transition-all duration-300 ease-in-out";
+                // Add a subtle bounce animation
+                setTimeout(() => {
+                    toast.style.transform = 'scale(1.05)';
+                    setTimeout(() => {
+                        toast.style.transform = 'scale(1)';
+                    }, 150);
+                }, 10);
+            } else {
+                toast.className = "fixed top-5 right-5 bg-red-500 text-white p-4 rounded-lg shadow-lg z-50 transform transition-all duration-300 ease-in-out";
+            }
+            
+            toast.classList.remove('hidden');
+            
+            setTimeout(() => {
+                toast.style.transform = 'translateX(100%)';
+                setTimeout(() => {
+                    toast.classList.add('hidden');
+                    toast.style.transform = 'translateX(0)';
+                }, 300);
+            }, 3000);
+        }
+        function showError(message) { showToast(message, 'error'); }
+        function showSuccess(message) { showToast(message, 'success'); }
+
+        // Start the app
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</head>
+<body class="h-full font-sans antialiased bg-gray-50 dark:bg-gray-900">
+    
+    <!-- This is the main container -->
+    <div class="flex flex-col min-h-screen">
+        
+        <!-- Header / Progress -->
+        <header class="w-full bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-10">
+            <div class="max-w-3xl mx-auto p-4">
+                <div class="flex justify-between items-center">
+                    <h1 class="text-xl font-bold text-gray-800 dark:text-white">Indelible MVP</h1>
+                    <button id="dark-mode-toggle" class="p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <svg id="sun-icon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                        <svg id="moon-icon" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+                    </button>
+                </div>
+                <div class="mt-2">
+                    <span id="progress-text" class="text-sm font-medium text-gray-500 dark:text-gray-400">Word 0 of 0</span>
+                    <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 mt-1">
+                        <div id="progress-bar" class="bg-blue-600 h-2.5 rounded-full" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+        </header>
+        
+        <!-- Main Content Area -->
+        <main class="flex-grow max-w-3xl w-full mx-auto p-4 md:p-6">
+            
+            <!-- Preamble Screen -->
+            <div id="preamble-screen" class="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-lg text-center space-y-6">
+                <div class="space-y-4">
+                    <h2 class="text-3xl font-bold text-gray-900 dark:text-white">Help Me Build Indelible</h2>
+                    <p class="text-lg text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
+                        Thank you for testing this! You'll see <span id="word-count">5</span> words. For each one, you'll get to compare two mnemonic styles. 
+                        Your feedback on why you prefer one is the most important part. Let's start!
+                    </p>
+                </div>
+                <button id="start-test-btn" class="px-8 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    Start Test
+                </button>
+            </div>
+
+            <!-- Completion Screen -->
+            <div id="completion-screen" class="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-lg text-center space-y-6 hidden">
+                <div class="space-y-4">
+                    <h2 class="text-3xl font-bold text-gray-900 dark:text-white">You're all done. Thank you!</h2>
+                    <p class="text-lg text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
+                        You've completed the test! Your feedback has been saved and will be read directly by the developer. 
+                        This is exactly how great products get built.
+                    </p>
+                </div>
+                <div class="flex justify-center space-x-4">
+                    <button id="restart-test-btn" class="px-6 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 font-medium rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600">
+                        Test Again
+                    </button>
+                    <button id="share-feedback-btn" class="px-6 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700">
+                        Share Feedback
+                    </button>
+                </div>
+            </div>
+
+            <!-- Words Content -->
+            <div id="words-content" class="space-y-6 hidden">
+                
+                <!-- 1. Word & Definition Card -->
+                <section class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg">
+                    <!-- Word and Pronunciation -->
+                    <div class="flex justify-between items-center">
+                        <h2 id="word" class="text-4xl font-bold text-gray-900 dark:text-white">Word</h2>
+                        <button id="pronounce-btn" title="Play pronunciation" class="p-2 rounded-full text-gray-500 hover:bg-gray-100 hover:text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.858 8.464a5 5 0 000 7.072m2.828 2.828A9 9 0 0015.536 5.636M9 9l3 3m0 0l3 3m-3-3l-3 3m3-3l3-3"></path></svg>
+                        </button>
+                    </div>
+                    <!-- Definition and Example -->
+                    <div class="mt-4 space-y-2">
+                        <p id="definition" class="text-lg text-gray-700 dark:text-gray-300">Definition will load here...</p>
+                        <p id="example" class="text-lg text-gray-500 dark:text-gray-400 italic">"Example sentence will load here..."</p>
+                    </div>
+                </section>
+
+                <!-- 2. A/B Mnemonic Comparison Card -->
+                <section id="comparison-section" class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg space-y-4">
+                    <div class="flex justify-between items-center">
+                        <h3 id="mnemonic-title" class="text-2xl font-semibold text-gray-800 dark:text-white">Creator's Mnemonic</h3>
+                        <button id="switch-btn" class="flex items-center space-x-2 px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <!-- AI Icon -->
+                            <svg id="switch-btn-ai-icon" class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM9.75 14.25l-.813 2.846L7.5 15.75l2.25-1.5z" /></svg>
+                            <!-- Creator Icon -->
+                            <svg id="switch-btn-creator-icon" class="w-5 h-5 hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M17.982 18.725A7.488 7.488 0 0012 15.75a7.488 7.488 0 00-5.982 2.975m11.963 0a9 9 0 10-11.963 0m11.963 0A8.966 8.966 0 0112 21a8.966 8.966 0 01-5.982-2.275M15 9.75a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                            
+                            <span id="switch-btn-text" class="text-sm font-medium">See AI Alternative</span>
+                        </button>
+                    </div>
+                    
+                    <img id="mnemonic-img" src="https://placehold.co/600x400/eee/999?text=Loading..." alt="Mnemonic Image" class="w-full rounded-lg bg-gray-200 dark:bg-gray-700 object-cover aspect-video">
+                    
+                    <p id="mnemonic-text" class="text-lg text-gray-700 dark:text-gray-300">Mnemonic text will load here...</p>
+                </section>
+                
+                <!-- 3. Feedback Collection -->
+                <section class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg space-y-3">
+                    <h3 class="text-lg font-semibold text-gray-800 dark:text-white">Which one helped you remember?</h3>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <button id="prefer-creator-btn" class="w-full text-center px-4 py-3 bg-blue-50 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-lg font-medium hover:bg-blue-100 dark:hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            Creator's Mnemonic
+                        </button>
+                        <button id="prefer-ai-btn" class="w-full text-center px-4 py-3 bg-purple-50 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-lg font-medium hover:bg-purple-100 dark:hover:bg-purple-800 focus:outline-none focus:ring-2 focus:ring-purple-500">
+                            AI's Mnemonic
+                        </button>
+                    </div>
+                </section>
+                
+                <!-- 4. Story Section -->
+                <section id="story-section" class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg space-y-4 hidden">
+                    <div class="flex justify-between items-center">
+                        <h3 class="text-2xl font-semibold text-gray-800 dark:text-white">See it in a Story</h3>
+                        <button id="story-audio-btn" title="Play story audio" class="p-2 rounded-full text-gray-500 hover:bg-gray-100 hover:text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
+                        </button>
+                    </div>
+                    <p id="story-text" class="text-lg text-gray-700 dark:text-gray-300">Story will load here...</p>
+                </section>
+
+            </div>
+        </main>
+        
+        <!-- Footer / Navigation -->
+        <footer class="w-full bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 sticky bottom-0 z-10">
+            <div class="max-w-3xl mx-auto p-4 flex justify-between items-center">
+                <button id="nav-prev" class="px-6 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 font-medium rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50">
+                    Previous
+                </button>
+                <button id="nav-next" class="px-6 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50">
+                    Next
+                </button>
+            </div>
+        </footer>
+    </div>
+    
+    <!-- Feedback Modal -->
+    <div id="feedback-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4 hidden">
+        <div class="bg-white dark:bg-gray-800 w-full max-w-lg p-6 rounded-lg shadow-xl">
+            <h2 id="feedback-question" class="text-xl font-semibold text-gray-900 dark:text-white">Why did you prefer this one?</h2>
+            <p class="text-gray-600 dark:text-gray-300 mt-1">This is the most helpful feedback! Thank you.</p>
+            <textarea id="feedback-textarea" rows="4" class="w-full mt-4 p-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="e.g., 'The image was funnier', 'The sound-alike made more sense', etc."></textarea>
+            <div class="mt-4 flex justify-end space-x-3">
+                <button id="feedback-cancel-btn" class="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600">Cancel</button>
+                <button id="feedback-submit-btn" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">Submit Feedback</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed top-5 right-5 bg-green-500 text-white p-4 rounded-lg shadow-lg z-50 hidden">
+        <span id="toast-message">Feedback saved!</span>
+    </div>
+
+</body>
+</html>

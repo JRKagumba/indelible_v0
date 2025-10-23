@@ -1,0 +1,24 @@
+{
+  "name": "indelible-v0",
+  "version": "1.0.0",
+  "description": "AI Vocabulary Builder - Mnemonic Factory",
+  "main": "mnemonic-factory.js",
+  "scripts": {
+    "start": "node mnemonic-factory.js",
+    "test": "node test-ab-pipeline.js",
+    "test-old": "node test-pipeline.js",
+    "setup": "node setup.js",
+    "install-deps": "npm install",
+    "integrate-assets": "node integrate-assets.js"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.21.0",
+    "axios": "^1.6.0",
+    "dotenv": "^16.3.1",
+    "fs": "^0.0.1-security",
+    "path": "^0.12.7"
+  },
+  "keywords": ["ai", "vocabulary", "mnemonic", "education"],
+  "author": "JRKagumba",
+  "license": "MIT"
+}
